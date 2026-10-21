@@ -1,108 +1,23 @@
--- Mobile Player ESP
+
+-- Mobile Player ESP UI
 -- For your own Roblox Studio game
+-- Place in StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
-local ESPEnabled = true
-local NamesEnabled = true
-local DistanceEnabled = true
-local Highlights = {}
-
-local function removeESP(player)
-    local data = Highlights[player]
-    if data then
-        if data.Highlight then data.Highlight:Destroy() end
-        if data.Billboard then data.Billboard:Destroy() end
-        Highlights[player] = nil
-    end
-end
-
-local function addESP(player)
-    if player == LocalPlayer then return end
-    removeESP(player)
-
-    local character = player.Character
-    if not character then return end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local head = character:FindFirstChild("Head")
-    if not humanoid or not head then return end
-
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "PlayerESPHighlight"
-    highlight.Adornee = character
-    highlight.FillColor = Color3.fromRGB(255, 65, 65)
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.FillTransparency = 0.55
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Enabled = ESPEnabled
-    highlight.Parent = character
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "PlayerESPLabel"
-    billboard.Adornee = head
-    billboard.Size = UDim2.fromOffset(180, 42)
-    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Enabled = NamesEnabled or DistanceEnabled
-    billboard.Parent = head
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.fromScale(1, 1)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextStrokeTransparency = 0.2
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 13
-    label.Parent = billboard
-
-    Highlights[player] = {
-        Highlight = highlight,
-        Billboard = billboard,
-        Label = label,
-        Character = character
-    }
-end
-
-local function refresh()
-    for player, data in pairs(Highlights) do
-        if data.Character and data.Character.Parent then
-            data.Highlight.Enabled = ESPEnabled
-            data.Billboard.Enabled = ESPEnabled
-                and (NamesEnabled or DistanceEnabled)
-
-            local text = {}
-            if NamesEnabled then
-                table.insert(text, player.DisplayName)
-            end
-
-            if DistanceEnabled and LocalPlayer.Character then
-                local myRoot = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                local theirRoot = data.Character:FindFirstChild("HumanoidRootPart")
-                if myRoot and theirRoot then
-                    table.insert(text, math.floor(
-                        (myRoot.Position - theirRoot.Position).Magnitude
-                    ) .. " studs")
-                end
-            end
-
-            data.Label.Text = table.concat(text, " | ")
-        end
-    end
-end
-
--- Simple mobile-friendly menu
 local gui = Instance.new("ScreenGui")
 gui.Name = "PlayerESPMenu"
 gui.ResetOnSpawn = false
-gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+gui.Parent = playerGui
 
 local main = Instance.new("Frame")
-main.Size = UDim2.fromOffset(210, 190)
-main.Position = UDim2.new(0, 15, 0.35, 0)
+main.Size = UDim2.fromOffset(210, 155)
+main.Position = UDim2.new(0, 15, 0.3, 0)
 main.BackgroundColor3 = Color3.fromRGB(27, 29, 35)
 main.BorderSizePixel = 0
+main.Active = true
 main.Parent = gui
 
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
@@ -110,55 +25,17 @@ Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
 local header = Instance.new("TextButton")
 header.Size = UDim2.new(1, 0, 0, 38)
 header.BackgroundColor3 = Color3.fromRGB(45, 48, 58)
-header.Text = "PLAYER ESP     —"
+header.Text = "PLAYER ESP    −"
 header.TextColor3 = Color3.new(1, 1, 1)
 header.Font = Enum.Font.GothamBold
 header.TextSize = 13
 header.Parent = main
+
 Instance.new("UICorner", header).CornerRadius = UDim.new(0, 10)
 
--- Drag by the header; works with mouse and touch.
-local dragging = false
-local dragStart, startPos, dragInput
-
-header.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = main.Position
-
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-header.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-game:GetService("UserInputService").InputChanged:Connect(function(input)
-    if dragging and input == dragInput then
-        local delta = input.Position - dragStart
-        main.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + delta.X,
-            startPos.Y.Scale, startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
-local minimized = false
-local buttons = {}
-
-local function makeToggle(text, y, callback)
+local function createButton(text, y)
     local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, -16, 0, 34)
+    button.Size = UDim2.new(1, -16, 0, 30)
     button.Position = UDim2.fromOffset(8, y)
     button.BackgroundColor3 = Color3.fromRGB(48, 52, 63)
     button.TextColor3 = Color3.new(1, 1, 1)
@@ -166,73 +43,139 @@ local function makeToggle(text, y, callback)
     button.TextSize = 12
     button.Text = text
     button.Parent = main
+
     Instance.new("UICorner", button).CornerRadius = UDim.new(0, 7)
-    button.Activated:Connect(callback)
-    table.insert(buttons, button)
     return button
 end
 
-makeToggle("ESP: ON", 46, function()
-    ESPEnabled = not ESPEnabled
-    refresh()
-end).Name = "ESPToggle"
+local espOn = false
+local namesOn = true
+local distanceOn = true
+local minimized = false
 
-makeToggle("Names: ON", 84, function()
-    NamesEnabled = not NamesEnabled
-    refresh()
-end).Name = "NamesToggle"
+local espButton = createButton("Highlights: OFF", 46)
+local namesButton = createButton("Names: ON", 81)
+local distanceButton = createButton("Distance: ON", 116)
 
-makeToggle("Distance: ON", 122, function()
-    DistanceEnabled = not DistanceEnabled
-    refresh()
-end).Name = "DistanceToggle"
+local highlights = {}
 
--- Update button labels and ESP state
-local function updateMenu()
-    for _, button in ipairs(buttons) do
-        if button.Name == "ESPToggle" then
-            button.Text = "ESP: " .. (ESPEnabled and "ON" or "OFF")
-        elseif button.Name == "NamesToggle" then
-            button.Text = "Names: " .. (NamesEnabled and "ON" or "OFF")
-        elseif button.Name == "DistanceToggle" then
-            button.Text = "Distance: " .. (DistanceEnabled and "ON" or "OFF")
+local function removeHighlight(target)
+    if highlights[target] then
+        highlights[target]:Destroy()
+        highlights[target] = nil
+    end
+end
+
+local function addHighlight(target)
+    if target == player or not target.Character then
+        return
+    end
+
+    removeHighlight(target)
+
+    local highlight = Instance.new("Highlight")
+    highlight.Adornee = target.Character
+    highlight.FillColor = Color3.fromRGB(255, 65, 65)
+    highlight.OutlineColor = Color3.new(1, 1, 1)
+    highlight.FillTransparency = 0.55
+    highlight.DepthMode = Enum.HighlightDepthMode.Occluded
+    highlight.Enabled = espOn
+    highlight.Parent = target.Character
+
+    highlights[target] = highlight
+end
+
+local function refresh()
+    for target, highlight in pairs(highlights) do
+        if highlight.Parent and target.Character then
+            highlight.Enabled = espOn
         end
     end
-    refresh()
+
+    espButton.Text = "Highlights: " .. (espOn and "ON" or "OFF")
+    namesButton.Text = "Names: " .. (namesOn and "ON" or "OFF")
+    distanceButton.Text = "Distance: " .. (distanceOn and "ON" or "OFF")
 end
 
-for _, button in ipairs(buttons) do
-    button.Activated:Connect(updateMenu)
-end
+espButton.Activated:Connect(function()
+    espOn = not espOn
+    refresh()
+end)
+
+namesButton.Activated:Connect(function()
+    namesOn = not namesOn
+    refresh()
+end)
+
+distanceButton.Activated:Connect(function()
+    distanceOn = not distanceOn
+    refresh()
+end)
 
 header.Activated:Connect(function()
     minimized = not minimized
-    for _, button in ipairs(buttons) do
-        button.Visible = not minimized
-    end
-    main.Size = UDim2.fromOffset(210, minimized and 38 or 190)
-    header.Text = minimized and "PLAYER ESP     +" or "PLAYER ESP     —"
+    espButton.Visible = not minimized
+    namesButton.Visible = not minimized
+    distanceButton.Visible = not minimized
+    main.Size = UDim2.fromOffset(210, minimized and 38 or 155)
+    header.Text = minimized and "PLAYER ESP    +" or "PLAYER ESP    −"
 end)
 
-local function setupPlayer(player)
-    player.CharacterAdded:Connect(function()
+-- Drag the menu using its header on mouse or touch.
+local dragging = false
+local dragStart
+local startPosition
+
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPosition = main.Position
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if dragging and (
+        input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch
+    ) then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
+        )
+    end
+end)
+
+game:GetService("UserInputService").InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+local function setupTarget(target)
+    if target == player then return end
+
+    target.CharacterAdded:Connect(function()
         task.wait(0.5)
-        addESP(player)
+        addHighlight(target)
         refresh()
     end)
-    if player.Character then
-        addESP(player)
+
+    if target.Character then
+        addHighlight(target)
     end
 end
 
-for _, player in ipairs(Players:GetPlayers()) do
-    setupPlayer(player)
+for _, target in ipairs(Players:GetPlayers()) do
+    setupTarget(target)
 end
 
-Players.PlayerAdded:Connect(setupPlayer)
-Players.PlayerRemoving:Connect(removeESP)
+Players.PlayerAdded:Connect(setupTarget)
+Players.PlayerRemoving:Connect(removeHighlight)
 
-while gui.Parent do
-    refresh()
-    task.wait(0.25)
-end
+refresh()
