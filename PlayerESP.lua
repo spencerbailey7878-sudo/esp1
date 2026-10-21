@@ -1,7 +1,7 @@
 
--- Mobile Player ESP
+-- MOBILE PLAYER ESP
 -- For your own Roblox Studio game
--- Place in StarterPlayer > StarterPlayerScripts
+-- Location: StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -12,33 +12,42 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local ESPEnabled = true
 local NamesEnabled = true
 local DistanceEnabled = true
-local Highlights = {}
+local PlayerData = {}
 
+-- Remove a player's visual elements
 local function removeESP(player)
-    local data = Highlights[player]
+    local data = PlayerData[player]
     if not data then return end
 
-    if data.Highlight then data.Highlight:Destroy() end
-    if data.Billboard then data.Billboard:Destroy() end
+    if data.Highlight then
+        data.Highlight:Destroy()
+    end
 
-    Highlights[player] = nil
+    if data.Billboard then
+        data.Billboard:Destroy()
+    end
+
+    PlayerData[player] = nil
 end
 
+-- Update the label and highlight states
 local function refresh()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter
         and myCharacter:FindFirstChild("HumanoidRootPart")
 
-    for player, data in pairs(Highlights) do
+    for player, data in pairs(PlayerData) do
         local character = data.Character
 
-        if character and character.Parent
-            and data.Highlight and data.Highlight.Parent
-            and data.Billboard and data.Billboard.Parent then
+        if character and character.Parent then
+            if data.Highlight then
+                data.Highlight.Enabled = ESPEnabled
+            end
 
-            data.Highlight.Enabled = ESPEnabled
-            data.Billboard.Enabled = ESPEnabled
-                and (NamesEnabled or DistanceEnabled)
+            if data.Billboard then
+                data.Billboard.Enabled = ESPEnabled
+                    and (NamesEnabled or DistanceEnabled)
+            end
 
             local lines = {}
 
@@ -46,25 +55,28 @@ local function refresh()
                 table.insert(lines, player.DisplayName)
             end
 
-            if DistanceEnabled and myRoot then
-                local theirRoot =
-                    character:FindFirstChild("HumanoidRootPart")
+            local theirRoot =
+                character:FindFirstChild("HumanoidRootPart")
 
-                if theirRoot then
-                    local distance = math.floor(
-                        (myRoot.Position - theirRoot.Position).Magnitude
-                    )
-                    table.insert(lines, distance .. " studs")
-                end
+            if DistanceEnabled and myRoot and theirRoot then
+                local studs = math.floor(
+                    (myRoot.Position - theirRoot.Position).Magnitude
+                )
+
+                table.insert(lines, studs .. " studs")
             end
 
-            data.Label.Text = table.concat(lines, "\n")
+            if data.Label then
+                data.Label.Text = table.concat(lines, "\n")
+            end
         end
     end
 end
 
+-- Add visuals to a character
 local function addESP(player)
     if player == LocalPlayer then return end
+
     removeESP(player)
 
     local character = player.Character
@@ -76,7 +88,7 @@ local function addESP(player)
     if not head or not humanoid then return end
 
     local highlight = Instance.new("Highlight")
-    highlight.Name = "PlayerESPHighlight"
+    highlight.Name = "PlayerHighlight"
     highlight.Adornee = character
     highlight.FillColor = Color3.fromRGB(255, 65, 65)
     highlight.OutlineColor = Color3.new(1, 1, 1)
@@ -85,14 +97,14 @@ local function addESP(player)
     highlight.Enabled = ESPEnabled
     highlight.Parent = character
 
-    -- Fixed label parenting: PlayerGui, with Head as Adornee
+    -- Name and distance label
     local billboard = Instance.new("BillboardGui")
-    billboard.Name = "PlayerESPLabel"
+    billboard.Name = "PlayerInfo"
     billboard.Adornee = head
     billboard.Size = UDim2.fromOffset(260, 64)
     billboard.StudsOffset = Vector3.new(0, 3.5, 0)
     billboard.AlwaysOnTop = true
-    billboard.MaxDistance = 1000
+    billboard.MaxDistance = 2000
     billboard.Enabled = ESPEnabled
         and (NamesEnabled or DistanceEnabled)
     billboard.Parent = PlayerGui
@@ -109,17 +121,17 @@ local function addESP(player)
     label.TextWrapped = true
     label.Parent = billboard
 
-    Highlights[player] = {
+    PlayerData[player] = {
+        Character = character,
         Highlight = highlight,
         Billboard = billboard,
-        Label = label,
-        Character = character
+        Label = label
     }
 
     refresh()
 end
 
--- Mobile menu
+-- Create the mobile menu
 local gui = Instance.new("ScreenGui")
 gui.Name = "PlayerESPMenu"
 gui.ResetOnSpawn = false
@@ -146,10 +158,10 @@ header.Parent = main
 
 Instance.new("UICorner", header).CornerRadius = UDim.new(0, 10)
 
-local buttons = {}
 local minimized = false
+local buttons = {}
 
-local function makeToggle(name, y)
+local function makeButton(name, text, y)
     local button = Instance.new("TextButton")
     button.Name = name
     button.Size = UDim2.new(1, -16, 0, 30)
@@ -158,16 +170,18 @@ local function makeToggle(name, y)
     button.TextColor3 = Color3.new(1, 1, 1)
     button.Font = Enum.Font.Gotham
     button.TextSize = 12
+    button.Text = text
     button.Parent = main
 
     Instance.new("UICorner", button).CornerRadius = UDim.new(0, 7)
     table.insert(buttons, button)
+
     return button
 end
 
-local espButton = makeToggle("ESPToggle", 46)
-local namesButton = makeToggle("NamesToggle", 81)
-local distanceButton = makeToggle("DistanceToggle", 116)
+local espButton = makeButton("ESPButton", "", 46)
+local namesButton = makeButton("NamesButton", "", 81)
+local distanceButton = makeButton("DistanceButton", "", 116)
 
 local function updateMenu()
     espButton.Text = "Highlights: " .. (ESPEnabled and "ON" or "OFF")
@@ -193,6 +207,7 @@ distanceButton.Activated:Connect(function()
     updateMenu()
 end)
 
+-- Minimize and restore
 header.Activated:Connect(function()
     minimized = not minimized
 
@@ -204,27 +219,35 @@ header.Activated:Connect(function()
     header.Text = minimized and "PLAYER ESP    +" or "PLAYER ESP    −"
 end)
 
--- Drag menu with mouse or touch
+-- Drag menu by its header using mouse or touch
 local dragging = false
 local dragStart
 local startPosition
-local activeInput
+local activeTouch
 
 header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
+
         dragging = true
         dragStart = input.Position
         startPosition = main.Position
-        activeInput = input
+
+        if input.UserInputType == Enum.UserInputType.Touch then
+            activeTouch = input
+        end
     end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
     if not dragging then return end
 
-    if input.UserInputType == Enum.UserInputType.MouseMovement
-        or input == activeInput then
+    local isMouse =
+        input.UserInputType == Enum.UserInputType.MouseMovement
+
+    local isTouch = input == activeTouch
+
+    if isMouse or isTouch then
         local delta = input.Position - dragStart
 
         main.Position = UDim2.new(
@@ -238,19 +261,19 @@ end)
 
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input == activeInput then
+        or input == activeTouch then
         dragging = false
-        activeInput = nil
+        activeTouch = nil
     end
 end)
 
+-- Set up players and respawns
 local function setupPlayer(player)
     if player == LocalPlayer then return end
 
     player.CharacterAdded:Connect(function()
         task.wait(0.5)
         addESP(player)
-        refresh()
     end)
 
     if player.Character then
@@ -268,16 +291,12 @@ Players.PlayerRemoving:Connect(function(player)
     removeESP(player)
 end)
 
+-- Keep distances updated
 task.spawn(function()
     while gui.Parent do
         refresh()
         task.wait(0.25)
     end
-end)
-
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(0.5)
-    refresh()
 end)
 
 updateMenu()
