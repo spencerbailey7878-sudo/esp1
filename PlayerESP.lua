@@ -14,81 +14,28 @@ local NamesEnabled = true
 local DistanceEnabled = true
 local Highlights = {}
 
--- Remove a player's ESP
 local function removeESP(player)
     local data = Highlights[player]
-    if data then
-        if data.Highlight then
-            data.Highlight:Destroy()
-        end
-        if data.Billboard then
-            data.Billboard:Destroy()
-        end
-        Highlights[player] = nil
-    end
+    if not data then return end
+
+    if data.Highlight then data.Highlight:Destroy() end
+    if data.Billboard then data.Billboard:Destroy() end
+
+    Highlights[player] = nil
 end
 
--- Create ESP for one character
-local function addESP(player)
-    if player == LocalPlayer then return end
-
-    removeESP(player)
-
-    local character = player.Character
-    if not character then return end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local head = character:FindFirstChild("Head")
-
-    if not humanoid or not head then return end
-
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "PlayerESPHighlight"
-    highlight.Adornee = character
-    highlight.FillColor = Color3.fromRGB(255, 65, 65)
-    highlight.OutlineColor = Color3.new(1, 1, 1)
-    highlight.FillTransparency = 0.55
-    highlight.DepthMode = Enum.HighlightDepthMode.Occluded
-    highlight.Enabled = ESPEnabled
-    highlight.Parent = character
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "PlayerESPLabel"
-    billboard.Adornee = head
-    billboard.Size = UDim2.fromOffset(240, 65)
-    billboard.StudsOffset = Vector3.new(0, 3.5, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Enabled = ESPEnabled
-        and (NamesEnabled or DistanceEnabled)
-    billboard.Parent = head
-
-    local label = Instance.new("TextLabel")
-    label.Name = "Info"
-    label.Size = UDim2.fromScale(1, 1)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextStrokeTransparency = 0
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 20
-    label.TextWrapped = true
-    label.Parent = billboard
-
-    Highlights[player] = {
-        Highlight = highlight,
-        Billboard = billboard,
-        Label = label,
-        Character = character
-    }
-end
-
--- Update labels and toggle states
 local function refresh()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter
         and myCharacter:FindFirstChild("HumanoidRootPart")
 
     for player, data in pairs(Highlights) do
-        if data.Character and data.Character.Parent then
+        local character = data.Character
+
+        if character and character.Parent
+            and data.Highlight and data.Highlight.Parent
+            and data.Billboard and data.Billboard.Parent then
+
             data.Highlight.Enabled = ESPEnabled
             data.Billboard.Enabled = ESPEnabled
                 and (NamesEnabled or DistanceEnabled)
@@ -101,7 +48,7 @@ local function refresh()
 
             if DistanceEnabled and myRoot then
                 local theirRoot =
-                    data.Character:FindFirstChild("HumanoidRootPart")
+                    character:FindFirstChild("HumanoidRootPart")
 
                 if theirRoot then
                     local distance = math.floor(
@@ -116,7 +63,63 @@ local function refresh()
     end
 end
 
--- Create mobile menu
+local function addESP(player)
+    if player == LocalPlayer then return end
+    removeESP(player)
+
+    local character = player.Character
+    if not character then return end
+
+    local head = character:FindFirstChild("Head")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+
+    if not head or not humanoid then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "PlayerESPHighlight"
+    highlight.Adornee = character
+    highlight.FillColor = Color3.fromRGB(255, 65, 65)
+    highlight.OutlineColor = Color3.new(1, 1, 1)
+    highlight.FillTransparency = 0.55
+    highlight.DepthMode = Enum.HighlightDepthMode.Occluded
+    highlight.Enabled = ESPEnabled
+    highlight.Parent = character
+
+    -- Fixed label parenting: PlayerGui, with Head as Adornee
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "PlayerESPLabel"
+    billboard.Adornee = head
+    billboard.Size = UDim2.fromOffset(260, 64)
+    billboard.StudsOffset = Vector3.new(0, 3.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 1000
+    billboard.Enabled = ESPEnabled
+        and (NamesEnabled or DistanceEnabled)
+    billboard.Parent = PlayerGui
+
+    local label = Instance.new("TextLabel")
+    label.Name = "Info"
+    label.Size = UDim2.fromScale(1, 1)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 22
+    label.TextWrapped = true
+    label.Parent = billboard
+
+    Highlights[player] = {
+        Highlight = highlight,
+        Billboard = billboard,
+        Label = label,
+        Character = character
+    }
+
+    refresh()
+end
+
+-- Mobile menu
 local gui = Instance.new("ScreenGui")
 gui.Name = "PlayerESPMenu"
 gui.ResetOnSpawn = false
@@ -143,8 +146,8 @@ header.Parent = main
 
 Instance.new("UICorner", header).CornerRadius = UDim.new(0, 10)
 
-local minimized = false
 local buttons = {}
+local minimized = false
 
 local function makeToggle(name, y)
     local button = Instance.new("TextButton")
@@ -171,6 +174,7 @@ local function updateMenu()
     namesButton.Text = "Names: " .. (NamesEnabled and "ON" or "OFF")
     distanceButton.Text =
         "Distance: " .. (DistanceEnabled and "ON" or "OFF")
+
     refresh()
 end
 
@@ -200,7 +204,7 @@ header.Activated:Connect(function()
     header.Text = minimized and "PLAYER ESP    +" or "PLAYER ESP    −"
 end)
 
--- Drag menu using mouse or touch
+-- Drag menu with mouse or touch
 local dragging = false
 local dragStart
 local startPosition
@@ -219,12 +223,10 @@ end)
 UserInputService.InputChanged:Connect(function(input)
     if not dragging then return end
 
-    local isMouse = input.UserInputType
-        == Enum.UserInputType.MouseMovement
-    local isTouch = input == activeInput
-
-    if isMouse or isTouch then
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input == activeInput then
         local delta = input.Position - dragStart
+
         main.Position = UDim2.new(
             startPosition.X.Scale,
             startPosition.X.Offset + delta.X,
@@ -242,7 +244,6 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Track players and respawns
 local function setupPlayer(player)
     if player == LocalPlayer then return end
 
@@ -267,12 +268,16 @@ Players.PlayerRemoving:Connect(function(player)
     removeESP(player)
 end)
 
--- Refresh distances continuously
 task.spawn(function()
     while gui.Parent do
         refresh()
         task.wait(0.25)
     end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    refresh()
 end)
 
 updateMenu()
